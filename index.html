@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ISRC via Spotify</title>
+<style>
+  body{font-family:system-ui,Arial,Helvetica,sans-serif;max-width:760px;margin:40px auto;padding:0 16px}
+  input,button{font-size:16px;padding:8px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .row{display:grid;grid-template-columns:72px 1fr 260px;gap:12px;padding:8px 0;border-bottom:1px solid #eee}
+  .muted{color:#777}
+  #out{margin-top:12px}
+</style>
+<h1>ISRC via Spotify</h1>
+<p class="muted">Cole a URL do álbum do Spotify e clique em “Buscar”.</p>
+
+<div class="controls">
+  <input id="album" size="60" placeholder="https://open.spotify.com/album/..." />
+  <button id="go">Buscar</button>
+  <button id="csv">Baixar CSV</button>
+</div>
+
+<div id="out" class="muted">Aguardando URL…</div>
+
+<script>
+// TROQUE PELA SUA URL NA VERCEL:
+const API_URL = "http://localhost:3000/api/isrcs";
+
+async function apiPost(body){
+  const r = await fetch(API_URL, {
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){
+    const txt = await r.text().catch(()=>'');
+    throw new Error(txt || ('HTTP '+r.status));
+  }
+  return r;
+}
+
+document.getElementById('go').onclick = async () => {
+  const albumUrl = document.getElementById('album').value.trim();
+  const out = document.getElementById('out');
+  if(!albumUrl){ out.textContent = 'Informe uma URL de álbum do Spotify.'; return; }
+  out.textContent = 'Carregando…';
+  try{
+    const resp = await apiPost({ albumUrl });
+    const { rows } = await resp.json();
+    if(!rows || !rows.length){ out.textContent = 'Nenhuma faixa encontrada.'; return; }
+    out.innerHTML = rows.map(r => `
+      <div class="row">
+        <div>${r.track_number ?? ''}</div>
+        <div><a href="${r.spotify_url}" target="_blank" rel="noopener">${r.track_name}</a></div>
+        <div>${r.isrc || ''}</div>
+      </div>
+    `).join('');
+  }catch(e){
+    out.textContent = 'Erro: ' + e.message;
+  }
+};
+
+document.getElementById('csv').onclick = async () => {
+  const albumUrl = document.getElementById('album').value.trim();
+  if(!albumUrl) return;
+  const r = await apiPost({ albumUrl, format: 'csv' });
+  const blob = await r.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'isrcs.csv';
+  a.click();
+};
+</script>
+</html>
